@@ -11,9 +11,11 @@ deck.sh boards
 deck.sh cards "Work" Doing
 deck.sh add "Work" "To do" "Fix CI runner"
 deck.sh move "Work" 42 "Doing"
-deck.sh done "Work" 42
+deck.sh done 42
 deck.sh comment 42 "blocked on upstream"
 ```
+
+Tested against Nextcloud 35.0.2.
 
 ## Setup
 

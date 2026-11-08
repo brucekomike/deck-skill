@@ -27,13 +27,20 @@ copy the script out of the skill directory.
 
 ## API notes
 
-Deck's token-auth surface is under `/index.php/apps/deck/api/v1.0/...`:
+Tested against Nextcloud 35.0.2. Deck's token-auth surface is under
+`/index.php/apps/deck/api/v1.0/...`:
 
 - Board/scoped card routes: `boards/{boardId}/stacks/{stackId}/cards[/{cardId}]`,
-  plus `/reorder` (PUT, body `{"stackId":N}`) and `done`/`undone` via card PUT
-  `{"done":1|0}`.
-- Comments are card-global: `cards/{cardId}/comments`.
-- The cookie-auth internal routes (`/cards/{id}/done` etc.) are not used here.
+  plus `/reorder` (PUT, body `{"stackId":N}`) for moving between stacks.
+- `done`/`undone` are NOT accepted by REST card PUT (400); use the web route
+  `PUT /index.php/apps/deck/cards/{cardId}/done|undone`, which stamps an ISO
+  completion date (this is what the Deck UI calls). Completing a card can
+  auto-move it to the board's configured done stack.
+- Comments are only routed under the OCS base:
+  `POST /ocs/v2.php/apps/deck/api/v1.0/cards/{cardId}/comments`.
+- Stack lists (`boards/{id}/stacks`) embed cards; `boards/{id}` itself does
+  not — read stacks, never the board payload, when you need cards.
+- Card create requires `title`, `type: "plain"`, and `order`.
 
 ## Validation
 

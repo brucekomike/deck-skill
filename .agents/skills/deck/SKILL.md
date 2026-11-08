@@ -1,7 +1,7 @@
 ---
 name: deck
 description: Read and manage Nextcloud Deck kanban boards, stacks, cards, and comments via the REST API. Use when the user asks about their tasks, board, deck, kanban, "what's on my todo", to add/move/complete a task, or to comment on a card.
-compatibility: Requires Bash, curl, jq, and network access to a Nextcloud server with the Deck app. Credentials come from a local config file.
+compatibility: Requires Bash, curl, jq, and network access to a Nextcloud server with the Deck app. Credentials come from a local config file. Tested against Nextcloud 35.0.2.
 ---
 
 # Nextcloud Deck
@@ -26,9 +26,9 @@ deck.sh cards    <board> [stack]           # id | [stack] | open/DONE | duedate 
 deck.sh show     <board> <card-id>         # full card JSON subset
 deck.sh add      <board> <stack> <title> [description]
 deck.sh move     <board> <card-id> <stack> # move card to another stack
-deck.sh done     <board> <card-id>         # check the card off
-deck.sh undone   <board> <card-id>
-deck.sh comment  <card-id> <text>          # add a comment (card id is enough)
+deck.sh done     <card-id>                # check the card off
+deck.sh undone   <card-id>
+deck.sh comment  <card-id> <text>          # add a comment
 ```
 
 `<board>` and `<stack>` accept a name (case-insensitive) or numeric id.
