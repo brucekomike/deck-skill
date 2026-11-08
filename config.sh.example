@@ -1,0 +1,13 @@
+# Nextcloud Deck connection settings
+# Copy this file to config.sh and fill in the values. config.sh is git-ignored;
+# keep it mode 600 and never upload it with an agent toolkit.
+# Create a dedicated app password in Nextcloud: Settings -> Security ->
+# Devices/sessions -> Create new token. Restrict it to the Deck app if the
+# server supports per-app tokens.
+
+export DECK_URL="https://cloud.example.com"   # no trailing slash needed
+export DECK_USER="your-username"
+export DECK_TOKEN="app-password-token"
+
+# Optional: proxy for slow networks (applies to all requests)
+# export DECK_PROXY="http://127.0.0.1:7890"
