@@ -61,8 +61,14 @@ the OCS surface `/ocs/v2.php/apps/deck/api/v1.1/...`:
 
 - `main` / `api-1.1`: full Deck REST API v1.1 surface.
 - `api-1.0`: frozen v1.0 implementation (kept for servers without Deck >= 1.3.0).
-- `api-1.2`: unreleased v1.2 board-import endpoints (`boards/import/...`);
-  merge into main only once Deck ships API 1.2.
+- `api-1.2`: unreleased v1.2 board-import endpoints (`boards/import/...`).
+  The script negotiates the API version from server capabilities
+  (override: `DECK_API_VERSION`), so it still runs at v1.1 on current
+  servers. Field-tested on Deck 1.19.2: `import-systems` already answers
+  (OCS-style envelope) on the v1.0/v1.1 REST base; `import-schema` 405s and
+  `POST boards/import` rejects both doc-form JSON and UI multipart payloads
+  (import is incomplete server-side). Keep those commands UNVERIFIED until
+  Deck ships API 1.2; merge into main only then.
 
 ## Validation
 

@@ -63,7 +63,19 @@ deck.sh config-set  <key> <value>               # e.g. calendar true
 deck.sh session-open <board>                    # prints websocket session token
 deck.sh session-sync <board> <token>
 deck.sh session-close <board> <token>
+# import (API v1.2 — unreleased; endpoint only exists on servers that ship it)
+deck.sh import-systems
+deck.sh import-schema <system>                  # config JSON schema, e.g. TrelloApi
+deck.sh import-board  <system> <config.json> <data.json>
+deck.sh import-file   <export.json>             # UI-style multipart import
 ```
+
+Server-side status of the v1.2 import surface on Deck 1.19.2: `import-systems`
+answers; `import-schema` and `import-board`/`import-file` are not yet usable
+(405/400) — treat them as forward-looking until Deck ships API 1.2.
+
+The script negotiates the API version from the server's capabilities
+(`apiVersions`) and accepts a `DECK_API_VERSION` override.
 
 Duedates are ISO-8601, e.g. `2026-11-20T18:00:00+00:00`.
 

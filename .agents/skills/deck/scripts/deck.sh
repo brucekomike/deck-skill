@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # deck.sh — Nextcloud Deck (kanban) client for agent use — Deck REST API v1.1
+# (+ unreleased v1.2 board import; the API version is negotiated against the
+# server's capabilities, override with DECK_API_VERSION)
 #
 # Boards:
 #   boards
@@ -41,6 +43,11 @@
 #   session-open   <board>
 #   session-sync   <board> <token>
 #   session-close  <board> <token>
+# Import (API v1.2, unreleased):
+#   import-systems
+#   import-schema  <system>                      # e.g. trello
+#   import-board   <system> <config.json> <data.json>
+#   import-file    <export.json>                 # UI-style multipart import
 #
 # "-" keeps the current value. No delete commands on purpose.
 #
@@ -57,13 +64,22 @@ source "$CONFIG"
 : "${DECK_URL:?DECK_URL missing in $CONFIG}"
 : "${DECK_USER:?DECK_USER missing in $CONFIG}"
 : "${DECK_TOKEN:?DECK_TOKEN missing in $CONFIG}"
-BASE="${DECK_URL%/}/index.php/apps/deck/api/v1.1"
-OCS="${DECK_URL%/}/ocs/v2.php/apps/deck/api/v1.1"
-WEB="${DECK_URL%/}/index.php/apps/deck"
 AUTH=(curl -sS --fail-with-body -u "$DECK_USER:$DECK_TOKEN"
       -H 'OCS-APIRequest: true' -H 'Accept: application/json')
 [[ -n "${DECK_PROXY:-}" ]] && AUTH+=(--proxy "$DECK_PROXY")
 CURL=("${AUTH[@]}" -H 'Content-Type: application/json')
+
+# API 1.2 is unreleased: negotiate the highest version the server advertises.
+VERSION="${DECK_API_VERSION:-}"
+if [[ -z "$VERSION" ]]; then
+  VERSION=$("${AUTH[@]}" "${DECK_URL%/}/ocs/v2.php/cloud/capabilities" 2>/dev/null \
+    | jq -r '[.ocs.data.capabilities.deck.apiVersions[]? | select(. == "1.2" or . == "1.1" or . == "1.0")] | max' \
+    2>/dev/null || true)
+  [[ "$VERSION" =~ ^1\.[012]$ ]] || VERSION=1.1
+fi
+BASE="${DECK_URL%/}/index.php/apps/deck/api/v${VERSION}"
+OCS="${DECK_URL%/}/ocs/v2.php/apps/deck/api/v${VERSION}"
+WEB="${DECK_URL%/}/index.php/apps/deck"
 
 api() { # api <METHOD> <path> [json-data]
   local method="$1" path="$2" data="${3:-}"
@@ -329,6 +345,31 @@ case "$cmd" in
     ocs POST "config/$k" "$(jq -n --argjson v "$v" '{value: $v}')" | jq '.ocs.data'
     ;;
 
+  import-systems)
+    # API v1.2 (unreleased): names of importable source systems.
+    # This endpoint answers on REST v1.1 on some builds, wrapped in an OCS envelope.
+    api GET boards/import/getSystems \
+      | jq -r '(.ocs.data // .data? // .)[] | "\(.internalName)\t\(.name)"'
+    ;;
+  import-schema)
+    # API v1.2 (unreleased): JSON schema of the config for a source system
+    api GET "boards/import/config/system/$1" | env
+    ;;
+  import-board)
+    # API v1.2 (unreleased): import a board exported from another system
+    sys="$1"; cfg="$2"; dat="$3"
+    [[ -f "$cfg" && -f "$dat" ]] || { echo "deck: config/data JSON files not found" >&2; exit 1; }
+    payload=$(jq -n --arg s "$sys" --slurpfile c "$cfg" --slurpfile d "$dat" \
+      '{system: $s, config: $c[0], data: $d[0]}')
+    api POST boards/import "$payload" | env
+    ;;
+  import-file)
+    # UI-style multipart import of a Deck/Trello JSON export file
+    f="$1"
+    [[ -f "$f" ]] || { echo "deck: file not found: $f" >&2; exit 1; }
+    "${AUTH[@]}" -X POST "$BASE/boards/import" -F "file=@${f}" | env
+    ;;
+
   session-open)
     b=$(resolve_board "$1")
     ocs PUT session/create "$(jq -n --argjson b "$b" '{boardId: $b}')" | jq -r '.ocs.data.token'
@@ -344,7 +385,7 @@ case "$cmd" in
     cat >&2 <<'EOF'
 usage: deck.sh <command> [args...]   (run with no args and see script header for the full list)
   boards | board <b> | create-board <title> [color] | update-board <b> [title] [color] [0|1]
-  stacks <b> [archived] | stack <b> <s> | create-stack <b> <s> [order] | update-stack <b> <s> [title] [order]
+  stacks <b> [archived] | stack <b> <s> | create-stack <b> <title> [order] | update-stack <b> <s> [title] [order]
   cards <b> [stack] | show <b> <c> | add <b> <s> <title> [desc] [duedate] | update <b> <c> [title] [desc] [duedate|none]
   move <b> <c> <s> [order] | done <c> | undone <c>
   assign-label <b> <c> <l> | unassign-label <b> <c> <l> | assign-user <b> <c> <u> | unassign-user <b> <c> <u>
@@ -353,6 +394,7 @@ usage: deck.sh <command> [args...]   (run with no args and see script header for
   comments <c> [limit] [offset] | comment <c> <text> [parent] | edit-comment <c> <cm> <text>
   config | config-set <key> <value>
   session-open <b> | session-sync <b> <token> | session-close <b> <token>
+  import-systems | import-schema <system> | import-board <system> <config.json> <data.json> | import-file <export.json>
 EOF
     exit 2
     ;;
