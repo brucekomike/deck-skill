@@ -1,7 +1,7 @@
 ---
 name: deck
 description: Read and manage Nextcloud Deck kanban boards, stacks, cards, labels, attachments, comments and config via the Deck REST API v1.1. Use when the user asks about their tasks, board, deck, kanban, "what's on my todo", to add/move/complete a task, create boards/stacks/labels, or to comment on a card.
-compatibility: Requires Bash, curl, jq, and network access to a Nextcloud server with the Deck app (API v1.1, Deck >= 1.3.0). Credentials come from a local config file. Tested against Nextcloud 35.0.2 / Deck 1.19.2.
+compatibility: Requires Bash, curl, jq, and network access to a Nextcloud server with the Deck app (API v1.1, Deck >= 1.3.0). Credentials come from a local config file or the environment; DECK_SITE selects among multiple servers. Tested against Nextcloud 35.0.2 / Deck 1.19.2.
 ---
 
 # Nextcloud Deck
@@ -14,8 +14,30 @@ current working directory.
 bash <skill-directory>/scripts/deck.sh <command> [args...]
 ```
 
-Configuration is read from `~/.config/deck-skill/config.sh`
-(`DECK_URL`, `DECK_USER`, `DECK_TOKEN` app password, optional `DECK_PROXY`).
+Configuration is resolved by the script itself: the first file found among
+`$DECK_CONFIG`, `./config.sh`, and `~/.config/deck-skill/config.sh`. Anything
+exported in the real environment overrides that file. Each site needs
+`DECK_URL`, `DECK_USER`, and a `DECK_TOKEN` app password; `DECK_PROXY` is
+optional.
+
+## Choosing a server
+
+`DECK_SITE` selects among multiple Nextcloud servers. It defaults to `default`,
+which is the plain `DECK_URL`/`DECK_USER`/`DECK_TOKEN`; other profiles are
+defined as `DECK_SITE_<NAME>_URL/USER/TOKEN` (optional `_PROXY`).
+
+```bash
+bash <skill-directory>/scripts/deck.sh sites        # list profiles; tokens never shown
+DECK_SITE=home bash <skill-directory>/scripts/deck.sh boards
+DECK_URL=https://cloud.example.com DECK_USER=me DECK_TOKEN=... \
+  bash <skill-directory>/scripts/deck.sh boards     # one-off, no config entry
+```
+
+Run `sites` first when the user mentions a server you have not used in this
+session; it also reports which config file was loaded and which site is
+selected. An unknown `DECK_SITE` name fails immediately rather than silently
+falling back to the default server — so after a failure, confirm the intended
+site instead of retrying blind.
 
 `<board>`, `<stack>`, `<label>` accept a name (case-insensitive) or numeric id.
 `-` in an optional positional argument keeps the current value.
@@ -63,6 +85,8 @@ deck.sh config-set  <key> <value>               # e.g. calendar true
 deck.sh session-open <board>                    # prints websocket session token
 deck.sh session-sync <board> <token>
 deck.sh session-close <board> <token>
+# site profiles (offline: reads config, makes no request)
+deck.sh sites                                   # profiles, hosts, which one is selected
 ```
 
 Duedates are ISO-8601, e.g. `2026-11-20T18:00:00+00:00`.
@@ -70,6 +94,10 @@ Duedates are ISO-8601, e.g. `2026-11-20T18:00:00+00:00`.
 ## Etiquette
 
 - Prefer `cards <board> Doing` style reads to answer status questions quickly.
+- Switch servers with `DECK_SITE=<profile>` on the command line rather than
+  editing `config.sh`. Board, stack, card, and label ids are per server: never
+  reuse an id resolved against one site on another, and re-resolve by name after
+  changing site.
 - Confirm with the user before deleting anything; this skill exposes no delete
   commands on purpose.
 - When the user says "create a task for X", add it to the board's To-do/Pending

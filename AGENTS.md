@@ -8,7 +8,10 @@ kanban boards. The canonical skill directory is `.agents/skills/deck/`;
 
 - Bash 4 or newer, `curl`, and `jq`
 - Network access to the Nextcloud server
-- `DECK_URL` / `DECK_USER` / `DECK_TOKEN` in `~/.config/deck-skill/config.sh`
+- `DECK_URL` / `DECK_USER` / `DECK_TOKEN`, or a `DECK_SITE_<NAME>_*` profile
+  selected with `DECK_SITE`, in `$DECK_CONFIG`, `./config.sh`, or
+  `~/.config/deck-skill/config.sh`. Exported environment values override the
+  config file. `deck.sh sites` lists what is configured.
 
 Use the bundled script; it resolves configuration and API paths itself. Do not
 copy the script out of the skill directory.
@@ -17,7 +20,8 @@ copy the script out of the skill directory.
 
 - All requests use HTTP basic auth with a user-generated app password. Never
   store the token in the repository, a skill file, or a prompt. `config.sh` is
-  git-ignored and must stay mode 600.
+  git-ignored and must stay mode 600. Each site profile carries its own app
+  password; `deck.sh sites` reports which are set without printing them.
 - The skill intentionally exposes no delete commands. Confirm with the user
   before any destructive operation, and do not retry auth failures without
   user confirmation.

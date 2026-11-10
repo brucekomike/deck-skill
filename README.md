@@ -33,6 +33,29 @@ Create an app password in Nextcloud: **Settings → Security → Devices/session
 Create new token**. The token lives only in the git-ignored local config with
 mode 600 — never in the repo, a skill file, or a prompt.
 
+### Multiple Nextcloud servers
+
+Define one `DECK_SITE_<NAME>_URL/USER/TOKEN` profile per server and select it
+with `DECK_SITE`, either in the config file or per command:
+
+```bash
+deck.sh sites                                  # list profiles; tokens are never shown
+DECK_SITE=home deck.sh boards
+```
+
+`DECK_SITE` defaults to `default`, which is the plain
+`DECK_URL`/`DECK_USER`/`DECK_TOKEN`. Config comes from the first file found
+among `$DECK_CONFIG`, `./config.sh`, and
+`~/.config/deck-skill/config.sh`; anything exported in the real environment
+overrides that file, so a one-off target needs no config at all:
+
+```bash
+DECK_URL=https://cloud.example.com DECK_USER=me DECK_TOKEN=app-password deck.sh boards
+```
+
+A profile may set its own `DECK_SITE_<NAME>_PROXY`; otherwise the global
+`DECK_PROXY` applies.
+
 ## Requirements
 
 Bash 4+, `curl`, `jq`, Nextcloud with Deck >= 1.3.0 (REST API v1.1; tested

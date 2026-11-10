@@ -4,10 +4,29 @@
 # Create a dedicated app password in Nextcloud: Settings -> Security ->
 # Devices/sessions -> Create new token. Restrict it to the Deck app if the
 # server supports per-app tokens.
+#
+# Config files are searched in this order, first hit wins: $DECK_CONFIG,
+# ./config.sh, ~/.config/deck-skill/config.sh. Values exported in the real
+# environment override whatever the found file sets.
 
+# Single/default site
 export DECK_URL="https://cloud.example.com"   # no trailing slash needed
 export DECK_USER="your-username"
 export DECK_TOKEN="app-password-token"
+
+# Multiple sites: set DECK_SITE to one profile name (case-insensitive), either
+# in this file or per command: DECK_SITE=work bash deck.sh boards
+# Profile names must contain only letters, numbers, and underscores.
+# Run 'deck.sh sites' to list the profiles that are configured.
+# export DECK_SITE="work"
+# export DECK_SITE_WORK_URL="https://cloud.example.com"
+# export DECK_SITE_WORK_USER="your-username"
+# export DECK_SITE_WORK_TOKEN="app-password-token"
+# export DECK_SITE_HOME_URL="https://nextcloud.example.org"
+# export DECK_SITE_HOME_USER="your-username"
+# export DECK_SITE_HOME_TOKEN="app-password-token"
+# A profile can carry its own proxy; otherwise the global DECK_PROXY applies.
+# export DECK_SITE_HOME_PROXY="http://127.0.0.1:7890"
 
 # Optional: proxy for slow networks (applies to all requests)
 # export DECK_PROXY="http://127.0.0.1:7890"

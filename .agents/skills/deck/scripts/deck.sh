@@ -41,22 +41,93 @@
 #   session-open   <board>
 #   session-sync   <board> <token>
 #   session-close  <board> <token>
+# Site profiles:
+#   sites
 #
 # "-" keeps the current value. No delete commands on purpose.
 #
-# Config: ~/.config/deck-skill/config.sh (override with DECK_CONFIG)
-#   DECK_URL (e.g. https://cloud.example.com), DECK_USER, DECK_TOKEN (app
-#   password), optional DECK_PROXY.
+# Config: the first file found among $DECK_CONFIG, ./config.sh, and
+# ~/.config/deck-skill/config.sh. Each site needs DECK_URL (e.g.
+# https://cloud.example.com), DECK_USER, DECK_TOKEN (app password), and an
+# optional DECK_PROXY. Values exported in the real environment override the
+# config file. DECK_SITE selects a named profile defined as
+# DECK_SITE_<PROFILE>_URL/USER/TOKEN (optional _PROXY); "default" is the plain
+# DECK_URL/DECK_USER/DECK_TOKEN. See "deck.sh sites" for what is configured.
 set -euo pipefail
 
-CONFIG="${DECK_CONFIG:-$HOME/.config/deck-skill/config.sh}"
-[[ -f "$CONFIG" ]] || { echo "deck: config not found at $CONFIG (copy config.sh.example)" >&2; exit 1; }
-# shellcheck disable=SC1090
-source "$CONFIG"
+# Capture the real environment before sourcing, so exported values always win
+# over the config file (same resolution order as mw-skills' lib.sh).
+_DECK_ENV_URL="${DECK_URL:-}"
+_DECK_ENV_USER="${DECK_USER:-}"
+_DECK_ENV_TOKEN="${DECK_TOKEN:-}"
+_DECK_ENV_SITE="${DECK_SITE:-}"
+_DECK_ENV_PROXY="${DECK_PROXY:-}"
+_DECK_CONFIG="${DECK_CONFIG:-}"
+if [[ -z "$_DECK_CONFIG" ]]; then
+  for _candidate in "${PWD}/config.sh" "${HOME}/.config/deck-skill/config.sh"; do
+    if [[ -f "$_candidate" ]]; then
+      _DECK_CONFIG="$_candidate"
+      break
+    fi
+  done
+fi
+if [[ -n "$_DECK_CONFIG" && -f "$_DECK_CONFIG" ]]; then
+  # shellcheck disable=SC1090
+  source "$_DECK_CONFIG"
+fi
 
-: "${DECK_URL:?DECK_URL missing in $CONFIG}"
-: "${DECK_USER:?DECK_USER missing in $CONFIG}"
-: "${DECK_TOKEN:?DECK_TOKEN missing in $CONFIG}"
+DECK_SITE="${_DECK_ENV_SITE:-${DECK_SITE:-default}}"
+if [[ ! "$DECK_SITE" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+  echo "deck: invalid DECK_SITE: $DECK_SITE (letters, digits, underscores)" >&2
+  exit 1
+fi
+_DECK_SITE_KEY="${DECK_SITE^^}"
+
+# Snapshot the plain (default-site) settings before a profile can replace them,
+# so `deck.sh sites` can report both.
+_DECK_DEFAULT_URL="${_DECK_ENV_URL:-${DECK_URL:-}}"
+_DECK_DEFAULT_USER="${_DECK_ENV_USER:-${DECK_USER:-}}"
+_DECK_DEFAULT_TOKEN="${_DECK_ENV_TOKEN:-${DECK_TOKEN:-}}"
+
+if [[ "$_DECK_SITE_KEY" != "DEFAULT" ]]; then
+  _DECK_PROFILE_URL="$(eval "printf '%s' \"\${DECK_SITE_${_DECK_SITE_KEY}_URL:-}\"")"
+  _DECK_PROFILE_USER="$(eval "printf '%s' \"\${DECK_SITE_${_DECK_SITE_KEY}_USER:-}\"")"
+  _DECK_PROFILE_TOKEN="$(eval "printf '%s' \"\${DECK_SITE_${_DECK_SITE_KEY}_TOKEN:-}\"")"
+  _DECK_PROFILE_PROXY="$(eval "printf '%s' \"\${DECK_SITE_${_DECK_SITE_KEY}_PROXY:-}\"")"
+  if [[ -z "$_DECK_PROFILE_URL" && -z "$_DECK_ENV_URL" ]]; then
+    echo "deck: unknown site profile: $DECK_SITE" >&2
+    echo "deck: define DECK_SITE_${_DECK_SITE_KEY}_URL/USER/TOKEN, or run 'deck.sh sites'" >&2
+    exit 1
+  fi
+  if [[ -n "$_DECK_PROFILE_URL" ]]; then
+    DECK_URL="$_DECK_PROFILE_URL"
+    DECK_USER="$_DECK_PROFILE_USER"
+    DECK_TOKEN="$_DECK_PROFILE_TOKEN"
+    if [[ -n "$_DECK_PROFILE_PROXY" ]]; then
+      DECK_PROXY="$_DECK_PROFILE_PROXY"
+    fi
+  fi
+fi
+
+DECK_URL="${_DECK_ENV_URL:-${DECK_URL:-}}"
+DECK_USER="${_DECK_ENV_USER:-${DECK_USER:-}}"
+DECK_TOKEN="${_DECK_ENV_TOKEN:-${DECK_TOKEN:-}}"
+DECK_PROXY="${_DECK_ENV_PROXY:-${DECK_PROXY:-}}"
+
+# `sites` only reports what is configured, so it must work with a partial config.
+if [[ "${1:-boards}" != "sites" ]]; then
+  _missing=()
+  [[ -n "$DECK_URL" ]]   || _missing+=(DECK_URL)
+  [[ -n "$DECK_USER" ]]  || _missing+=(DECK_USER)
+  [[ -n "$DECK_TOKEN" ]] || _missing+=(DECK_TOKEN)
+  if [[ "${#_missing[@]}" -gt 0 ]]; then
+    echo "deck: site '$DECK_SITE' is missing ${_missing[*]}" >&2
+    echo "deck: searched \$DECK_CONFIG, ./config.sh, ~/.config/deck-skill/config.sh (found: ${_DECK_CONFIG:-none})" >&2
+    echo "deck: copy config.sh.example to fill these in, or run 'deck.sh sites'" >&2
+    exit 1
+  fi
+fi
+
 BASE="${DECK_URL%/}/index.php/apps/deck/api/v1.1"
 OCS="${DECK_URL%/}/ocs/v2.php/apps/deck/api/v1.1"
 WEB="${DECK_URL%/}/index.php/apps/deck"
@@ -85,6 +156,43 @@ ocs() { # ocs <METHOD> <path> [json-data]
 
 # unwrap {data: ...} envelopes where present
 env() { jq '(.data? // .)'; }
+
+# List the default site plus every DECK_SITE_<NAME>_* profile found in the
+# config. Reports whether a token is set; never prints one.
+list-sites() {
+  local names=("default") key nm url user tok set_or_missing selected
+  while read -r key; do
+    nm="${key#DECK_SITE_}"
+    nm="${nm%_URL}"
+    names+=("${nm,,}")
+  done < <(compgen -v 'DECK_SITE_' | grep -E '_URL$' | sort -u)
+
+  echo "deck: config ${_DECK_CONFIG:-none found}; selected site: $DECK_SITE" >&2
+  printf '%-10s  %-42s  %-14s  %-8s  %s\n' SITE URL USER TOKEN SELECTED
+  for nm in "${names[@]}"; do
+    if [[ "$nm" == "default" ]]; then
+      url="$_DECK_DEFAULT_URL"
+      user="$_DECK_DEFAULT_USER"
+      tok="$_DECK_DEFAULT_TOKEN"
+    else
+      key="${nm^^}"
+      url="$(eval "printf '%s' \"\${DECK_SITE_${key}_URL:-}\"")"
+      user="$(eval "printf '%s' \"\${DECK_SITE_${key}_USER:-}\"")"
+      tok="$(eval "printf '%s' \"\${DECK_SITE_${key}_TOKEN:-}\"")"
+    fi
+    selected=""
+    if [[ "$nm" == "$DECK_SITE" ]]; then
+      selected="yes"
+    fi
+    if [[ -n "$tok" ]]; then
+      set_or_missing="set"
+    else
+      set_or_missing="missing"
+    fi
+    printf '%-10s  %-42s  %-14s  %-8s  %s\n' "$nm" "${url:--}" "${user:--}" \
+      "$set_or_missing" "$selected"
+  done
+}
 
 stacks_json() { api GET "boards/$1/stacks"; }
 
@@ -321,6 +429,10 @@ case "$cmd" in
       | jq -c '.ocs.data | {id, message}'
     ;;
 
+  sites)
+    list-sites
+    ;;
+
   config)
     ocs GET config | jq '.ocs.data'
     ;;
@@ -353,6 +465,9 @@ usage: deck.sh <command> [args...]   (run with no args and see script header for
   comments <c> [limit] [offset] | comment <c> <text> [parent] | edit-comment <c> <cm> <text>
   config | config-set <key> <value>
   session-open <b> | session-sync <b> <token> | session-close <b> <token>
+  sites                       # list configured site profiles (no tokens shown)
+Target a configured server other than the default with DECK_SITE=<profile>;
+one-off targets use DECK_URL/DECK_USER/DECK_TOKEN from the environment.
 EOF
     exit 2
     ;;
